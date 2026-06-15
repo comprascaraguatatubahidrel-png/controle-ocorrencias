@@ -1,9 +1,12 @@
-import { auth } from '@/auth'
-import { NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
+import { NextRequest, NextResponse } from 'next/server'
 
-export default auth((req) => {
+export async function middleware(req: NextRequest) {
   const { nextUrl } = req
-  const isLoggedIn = !!req.auth
+  
+  // Usamos getToken para evitar importar o Prisma/bcrypt no Edge Runtime
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET || '' })
+  const isLoggedIn = !!token
 
   const isAuthPage = nextUrl.pathname.startsWith('/login')
   const isApiAuth = nextUrl.pathname.startsWith('/api/auth')
@@ -20,7 +23,7 @@ export default auth((req) => {
   }
 
   return NextResponse.next()
-})
+}
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)'],
