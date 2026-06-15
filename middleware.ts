@@ -1,30 +1,28 @@
-import { getToken } from 'next-auth/jwt'
-import { NextRequest, NextResponse } from 'next/server'
+import NextAuth from 'next-auth'
+import { authConfig } from './auth.config'
+import { NextResponse } from 'next/server'
 
-export async function middleware(req: NextRequest) {
-  const { nextUrl } = req
-  
-  // Usamos getToken para evitar importar o Prisma/bcrypt no Edge Runtime
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET || '' })
-  const isLoggedIn = !!token
+const { auth } = NextAuth(authConfig)
 
-  const isAuthPage = nextUrl.pathname.startsWith('/login')
-  const isApiAuth = nextUrl.pathname.startsWith('/api/auth')
+export default auth((req) => {
+  const isLoggedIn = !!req.auth
+  const isAuthPage = req.nextUrl.pathname.startsWith('/login')
+  const isApiAuth = req.nextUrl.pathname.startsWith('/api/auth')
   const isPublic = isAuthPage || isApiAuth
 
   if (!isLoggedIn && !isPublic) {
-    const loginUrl = new URL('/login', nextUrl)
-    loginUrl.searchParams.set('callbackUrl', nextUrl.pathname)
+    const loginUrl = new URL('/login', req.nextUrl)
+    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname)
     return NextResponse.redirect(loginUrl)
   }
 
   if (isLoggedIn && isAuthPage) {
-    return NextResponse.redirect(new URL('/dashboard', nextUrl))
+    return NextResponse.redirect(new URL('/dashboard', req.nextUrl))
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$).*)'],
 }
