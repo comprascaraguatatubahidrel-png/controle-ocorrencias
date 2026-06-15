@@ -1,0 +1,205 @@
+// This is your Prisma schema file
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USUARIO
+}
+
+enum OccurrenceType {
+  NF_COM_FALTA
+  NF_RECUSADA
+}
+
+enum OccurrenceStatus {
+  ABERTA
+  AGUARDANDO_FORNECEDOR
+  EM_TRATATIVA
+  RESOLVIDA
+  CANCELADA
+}
+
+enum SupplierAcknowledged {
+  SIM
+  NAO
+  AGUARDANDO_RETORNO
+}
+
+enum TreatmentType {
+  ENTREGA_FUTURA
+  DESCONTO_EM_BOLETO
+  CREDITO_FUTURO
+  OUTRO
+}
+
+enum TreatmentStatus {
+  AGUARDANDO
+  EM_ANDAMENTO
+  CONCLUIDA
+}
+
+enum RefusalReason {
+  PRODUTO_INCORRETO
+  DIVERGENCIA_DE_PRECO
+  PRODUTO_AVARIADO
+  FALTA_DE_MERCADORIA
+  OUTRO
+}
+
+enum RefusalStatus {
+  RECUSADA
+  AGUARDANDO_NOVA_NF
+  RESOLVIDA
+}
+
+enum AttachmentType {
+  IMAGE
+  PDF
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(USUARIO)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  occurrences  Occurrence[]        @relation("OccurrenceResponsible")
+  history      OccurrenceHistory[]
+
+  @@map("users")
+}
+
+model Supplier {
+  id          String    @id @default(cuid())
+  name        String
+  cnpj        String?
+  contact     String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  occurrences Occurrence[]
+
+  @@index([name])
+  @@index([deletedAt])
+  @@map("suppliers")
+}
+
+model Occurrence {
+  id                   String               @id @default(cuid())
+  nfNumber             String
+  supplierId           String
+  nfDate               DateTime
+  nfValue              Decimal              @db.Decimal(15, 2)
+  type                 OccurrenceType
+  responsibleId        String
+  status               OccurrenceStatus     @default(ABERTA)
+  observations         String?
+  supplierAcknowledged SupplierAcknowledged @default(AGUARDANDO_RETORNO)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  deletedAt            DateTime?
+
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  responsible User                @relation("OccurrenceResponsible", fields: [responsibleId], references: [id])
+  missingItems MissingItem[]
+  treatment   Treatment?
+  refusal     RefusalDetail?
+  attachments Attachment[]
+  history     OccurrenceHistory[]
+
+  @@index([nfNumber])
+  @@index([supplierId])
+  @@index([responsibleId])
+  @@index([status])
+  @@index([type])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("occurrences")
+}
+
+model MissingItem {
+  id           String @id @default(cuid())
+  occurrenceId String
+  product      String
+  missingQty   Decimal @db.Decimal(10, 3)
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  @@index([occurrenceId])
+  @@map("missing_items")
+}
+
+model Treatment {
+  id           String          @id @default(cuid())
+  occurrenceId String          @unique
+  type         TreatmentType
+  promisedDate DateTime?
+  observations String?
+  status       TreatmentStatus @default(AGUARDANDO)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  @@map("treatments")
+}
+
+model RefusalDetail {
+  id           String        @id @default(cuid())
+  occurrenceId String        @unique
+  reason       RefusalReason
+  description  String?
+  status       RefusalStatus @default(RECUSADA)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  @@map("refusal_details")
+}
+
+model Attachment {
+  id           String         @id @default(cuid())
+  occurrenceId String
+  url          String
+  publicId     String
+  type         AttachmentType
+  name         String
+  createdAt    DateTime       @default(now())
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  @@index([occurrenceId])
+  @@map("attachments")
+}
+
+model OccurrenceHistory {
+  id           String   @id @default(cuid())
+  occurrenceId String
+  userId       String
+  action       String
+  details      String?
+  createdAt    DateTime @default(now())
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@index([occurrenceId])
+  @@index([createdAt])
+  @@map("occurrence_history")
+}
